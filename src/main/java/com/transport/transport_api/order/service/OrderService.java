@@ -8,12 +8,18 @@ import com.transport.transport_api.order.exception.InvalidOrderStatusTransitionE
 import com.transport.transport_api.order.exception.OrderNotFoundException;
 import com.transport.transport_api.order.mapper.OrderMapper;
 import com.transport.transport_api.order.repository.OrderRepository;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 
 
@@ -22,6 +28,68 @@ import java.util.UUID;
 public class OrderService {
     private final OrderRepository orderRepository;
     private  final OrderMapper orderMapper;
+
+    @Transactional(readOnly = true)
+    public OrderResponse findById(UUID id) {
+
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new OrderNotFoundException(id));
+
+        return orderMapper.toResponse(order);
+    }
+
+
+    @Transactional(readOnly = true)
+    public List<OrderResponse> findAll(
+            OrderStatus status,
+            LocalDate date,
+            String origin,
+            String destination) {
+
+        Specification<Order> filters = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            if (status != null) {
+                predicates.add(cb.equal(root.get("status"), status));
+            }
+
+            if (date != null) {
+                OffsetDateTime start =
+                        date.atStartOfDay().atOffset(ZoneOffset.UTC);
+                OffsetDateTime end =
+                        date.plusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC);
+
+                predicates.add(cb.greaterThanOrEqualTo(
+                        root.<OffsetDateTime>get("createdAt"), start));
+                predicates.add(cb.lessThan(
+                        root.<OffsetDateTime>get("createdAt"), end));
+            }
+
+            if (origin != null && !origin.isBlank()) {
+                predicates.add(cb.equal(
+                        cb.lower(root.get("origin")),
+                        origin.trim().toLowerCase(Locale.ROOT)));
+            }
+
+            if (destination != null && !destination.isBlank()) {
+                predicates.add(cb.equal(
+                        cb.lower(root.get("destination")),
+                        destination.trim().toLowerCase(Locale.ROOT)));
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return orderRepository.findAll(filters).stream()
+                .map(orderMapper::toResponse)
+                .toList();
+    }
+
+
+
+
+
+
 
     @Transactional
     public OrderResponse create (OrderRequest request){
