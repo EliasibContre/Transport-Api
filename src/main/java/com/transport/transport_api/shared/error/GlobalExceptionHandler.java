@@ -16,6 +16,20 @@ import java.util.stream.Collectors;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
+    @ExceptionHandler(ApplicationException.class)
+    public ProblemDetail applicationException(
+            ApplicationException ex, HttpServletRequest request) {
+
+        HttpStatus status = switch (ex.reason()) {
+            case RESOURCE_NOT_FOUND -> HttpStatus.NOT_FOUND;
+            case BUSINESS_RULE -> HttpStatus.CONFLICT;
+            case INVALID_FILE -> HttpStatus.BAD_REQUEST;
+        };
+
+        return problem(status, ex.reason().name(),
+                ex.getMessage(), request);
+    }
+
     @ExceptionHandler(OrderNotFoundException.class)
     public ProblemDetail notFound(
             OrderNotFoundException ex, HttpServletRequest request) {
@@ -48,6 +62,8 @@ public class GlobalExceptionHandler {
             HttpMessageNotReadableException.class,
             MethodArgumentTypeMismatchException.class
     })
+
+
     public ProblemDetail invalidInput(
             Exception ex, HttpServletRequest request) {
         return problem(HttpStatus.BAD_REQUEST, "INVALID_INPUT",
